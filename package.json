@@ -1,0 +1,17 @@
+{
+  "name": "asset-migration-tool",
+  "version": "1.0.0",
+  "description": "素材库跨通道迁移工作台（Node.js + Express，零构建网页控制台）",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node tests/e2e.mjs",
+    "audit": "node tests/audit.mjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

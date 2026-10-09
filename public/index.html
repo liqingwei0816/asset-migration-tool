@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>素材库跨通道迁移工作台</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // 静态资源瞬断自愈：服务重启窗口内刷新页面时，样式/脚本可能加载失败。
+    // 这里带退避自动重试（1s 起最长 5s 间隔），服务恢复后页面无需手动刷新即恢复正常。
+    (function () {
+      function retryLoop(make) {
+        var tries = 0;
+        function go() {
+          if (++tries > 12) return;
+          setTimeout(function () {
+            var el = make(go);
+            (document.head || document.body).appendChild(el);
+          }, 1000 * Math.min(tries, 5));
+        }
+        return go;
+      }
+      // 样式表重试
+      document.querySelector('link[rel="stylesheet"]').addEventListener('error', retryLoop(function (onErr) {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = 'style.css?retry=' + Date.now();
+        l.addEventListener('error', onErr);
+        return l;
+      }));
+      // 业务脚本重试（失败的 script 不会执行，重复加载安全）
+      window.__retryJs = retryLoop(function (onErr) {
+        var s = document.createElement('script');
+        s.src = 'app.js?retry=' + Date.now();
+        s.onerror = onErr;
+        return s;
+      });
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <div>
+          <h1>素材库跨通道迁移工作台</h1>
+          <p>通道配置 · 素材浏览 · 迁移任务 · 断点续跑</p>
+        </div>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="channels">通道配置</button>
+        <button class="tab" data-tab="browse">素材浏览</button>
+        <button class="tab" data-tab="jobs">迁移任务</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 通道配置 -->
+    <section id="tab-channels" class="tab-panel active">
+      <div class="card">
+        <div class="card-head">
+          <h2>通道列表</h2>
+          <button class="btn primary" id="btn-add-channel">＋ 新增通道</button>
+        </div>
+        <p class="hint">通道 = 平台分配的「服务商标识」+ 访问令牌 + 项目名。令牌仅保存在服务端 data/config.json，页面只显示掩码；保存时留空表示保持原值。</p>
+        <div id="channel-table"></div>
+      </div>
+    </section>
+
+    <!-- 素材浏览 -->
+    <section id="tab-browse" class="tab-panel">
+      <div class="card" id="browse-panel"></div>
+    </section>
+
+    <!-- 迁移任务 -->
+    <section id="tab-jobs" class="tab-panel">
+      <div class="card">
+        <div class="card-head">
+          <h2>创建迁移任务</h2>
+          <button class="btn" id="btn-toggle-create">收起</button>
+        </div>
+        <div id="job-create"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>任务列表</h2><span class="hint-inline" id="jobs-refresh-note"></span></div>
+        <div id="job-table"></div>
+      </div>
+      <div class="card" id="job-detail-card" style="display:none">
+        <div class="card-head">
+          <h2 id="job-detail-title">任务详情</h2>
+          <button class="btn" id="btn-close-detail">关闭</button>
+        </div>
+        <div id="job-detail"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <footer class="footer">内网工具 · 配置与任务状态持久化于服务端 data/ 目录 · 令牌请勿外泄</footer>
+
+  <script src="app.js" onerror="__retryJs && __retryJs()"></script>
+</body>
+</html>
