@@ -3,5 +3,4 @@ data/
 data-demo/
 *.log
 dist/
-runtime/
 docs/manual-build/lo_profile/

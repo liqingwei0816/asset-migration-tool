@@ -18,7 +18,7 @@ chmod +x start.sh
 ./start.sh
 ```
 
-启动脚本优先使用项目内置运行时 `runtime/`（免安装模式），不存在时回退系统 Node ≥18 并自动安装缺失依赖；**服务就绪后会自动用默认浏览器打开页面**（`OPEN_BROWSER` 环境变量可关闭）。
+启动脚本优先使用项目内置运行时 `runtime/`（**随仓库分发**，Windows 上克隆后无需安装 Node.js 直接运行），不存在时回退系统 Node ≥18 并自动安装缺失依赖；**服务就绪后会自动用默认浏览器打开页面**（`OPEN_BROWSER` 环境变量可关闭）。
 
 **方式二：免安装部署（目标机器无需 Node.js）**
 
@@ -76,7 +76,7 @@ Restart=always
 asset-migration-tool/
 ├── start.bat / start.sh     启动脚本（内置运行时优先，自动装依赖，自动开浏览器）
 ├── install-runtime.bat/.cjs 把 node.exe 装入 runtime/（免安装部署的一次性准备）
-├── runtime/                 内置 Node 运行时（可选，git 忽略）
+├── runtime/                 内置 Node 运行时 node.exe（Windows，随仓库分发，克隆即免安装）
 ├── src/
 │   ├── server.js            Express 入口与 REST API
 │   ├── config.js            配置管理（data/config.json，令牌掩码，单通道增删改）
