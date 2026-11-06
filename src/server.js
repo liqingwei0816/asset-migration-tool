@@ -175,7 +175,7 @@ export function createApp({ dataDir } = {}) {
 
   app.get('/api/jobs/:id/items', ah((req, res) => res.json(engine.listItems(req.params.id, req.query))));
 
-  app.post('/api/jobs/:id/:action(start|pause|cancel|retry-failed)', ah((req, res) => {
+  app.post('/api/jobs/:id/:action(start|pause|cancel|retry-failed|reset-skipped)', ah((req, res) => {
     res.json(engine.control(req.params.id, req.params.action));
   }));
 

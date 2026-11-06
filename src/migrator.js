@@ -100,14 +100,22 @@ export class JobEngine {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    for (const id of this.dirty) {
+    for (const id of [...this.dirty]) {
       const job = this.jobs.get(id);
-      if (job) {
+      if (!job) {
+        this.dirty.delete(id);
+        continue;
+      }
+      try {
         const { _stop, _workersAlive, _runtimeDup, ...data } = job; // 运行时字段不落盘
         writeJsonAtomic(path.join(this.jobsDir, `${id}.json`), data);
+        this.dirty.delete(id);
+      } catch (err) {
+        // 落盘失败（重试后仍被锁定等）：绝不让定时器里的单次写失败击穿进程；
+        // 保留脏标记，下次状态变化触发 markDirty 时自动重试落盘
+        console.error(`[jobs] 任务 ${id} 落盘失败（保留脏标记待重试）：${err.message}`);
       }
     }
-    this.dirty.clear();
   }
 
   // ── 读取 ──────────────────────────────────────────────────
@@ -368,6 +376,33 @@ export class JobEngine {
         }
         break;
       }
+      case 'reset-skipped': {
+        // 同名跳过的素材重新迁移：除状态外必须同步清掉 existing 标记与启动期防重集合中的键，
+        // 否则执行期查重（item.existing / _runtimeDup）会再次拦截
+        const skipped = job.items.filter(it => it.state === 'skipped');
+        if (!skipped.length) throw new JobError('没有可重置的已跳过素材');
+        for (const it of skipped) {
+          it.state = 'pending';
+          it.error = null;
+          it.existing = false;
+        }
+        if (job._runtimeDup) {
+          const groupIdMap = new Map(job.groups.map(g => [g.sourceGroupId, g.targetGroupId]));
+          for (const it of skipped) job._runtimeDup.delete(`${groupIdMap.get(it.src.groupId)}/${it.src.name}`);
+        }
+        // 持久化标记（非 _ 前缀，落盘）：源端同组同名副本往往有多份（每个名称 N 份），
+        // 运行期防重每轮只放行 1 份；置此后执行期不再按同名拦截，一次补迁全部副本。
+        // 进程重启续跑时标记仍在，不受运行期集合重建影响。
+        job.allowSameName = true;
+        this.recount(job);
+        this.log(job, 'info', `已将 ${skipped.length} 个「跳过同名」素材重置为待迁移`);
+        if (['completed', 'cancelled', 'failed'].includes(job.status)) {
+          job.status = 'paused';
+          job.finishedAt = null;
+          this.log(job, 'info', '任务转回「已暂停」，请点击「启动」执行补迁');
+        }
+        break;
+      }
       default:
         throw new JobError(`未知操作：${action}`, 400);
     }
@@ -446,7 +481,8 @@ export class JobEngine {
       if (!targetGroupId) throw new Error('目标组映射缺失（通道配置可能已变更）');
       const dupKey = `${targetGroupId}/${item.src.name}`;
       if (!item.dst.id) {
-        if (item.existing || job._runtimeDup?.has(dupKey)) {
+        // allowSameName：由「重置跳过」置位的补迁模式，跳过运行期同名拦截（existing 已在重置时清零）
+        if (item.existing || (!job.allowSameName && job._runtimeDup?.has(dupKey))) {
           item.state = 'skipped';
           item.error = item.existing ? '目标组已存在同名素材' : '本次任务已迁移过同名素材';
           this.bump(job, 'uploading', 'skipped');

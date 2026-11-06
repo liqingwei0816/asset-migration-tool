@@ -686,6 +686,7 @@ function renderJobTable() {
               ${j.status === 'running' ? '<button class="btn sm" data-act="pause">暂停</button>' : ''}
               ${['running', 'paused', 'ready', 'scanning'].includes(j.status) ? '<button class="btn sm danger" data-act="cancel">取消</button>' : ''}
               ${c.failed > 0 ? '<button class="btn sm" data-act="retry-failed">失败重试</button>' : ''}
+              ${c.skipped > 0 ? '<button class="btn sm" data-act="reset-skipped">重置跳过</button>' : ''}
               <button class="btn sm" data-act="detail">详情</button>
               <button class="btn sm" data-act="report-md">报告</button>
               <button class="btn sm" data-act="report-csv">CSV</button>
@@ -710,7 +711,7 @@ $('#job-table').addEventListener('click', async e => {
   btn.disabled = true;
   try {
     await api(`/api/jobs/${encodeURIComponent(id)}/${act}`, { method: 'POST' });
-    toast({ start: '任务已启动', pause: '任务已暂停', cancel: '任务已取消', 'retry-failed': '失败素材已重置，请启动任务执行重试' }[act] || '操作成功');
+    toast({ start: '任务已启动', pause: '任务已暂停', cancel: '任务已取消', 'retry-failed': '失败素材已重置，请启动任务执行重试', 'reset-skipped': '已跳过素材已重置为待迁移，请启动任务执行补迁' }[act] || '操作成功');
     await refreshJobs();
   } catch (err) { toast(err.message, true); btn.disabled = false; }
 });

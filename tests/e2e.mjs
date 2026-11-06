@@ -197,6 +197,39 @@ async function main() {
   check('重复执行全部跳过（幂等）', done3.body.status === 'completed' && done3.body.counters.skipped === 4 && done3.body.counters.done === 0, JSON.stringify(done3.body.counters));
   check('目标素材未重复增加', [...mock.vstate('dstv').assets.values()].length === 4);
 
+  // ── 重置跳过：把「跳过同名」的素材也迁移过去 ──
+  r = await j('POST', `/api/jobs/${job1.id}/reset-skipped`);
+  check('重置跳过：跳过项转为待迁移并转回暂停', r.status === 200 && r.body.job.counters.pending === 1 && r.body.job.counters.skipped === 0 && r.body.job.status === 'paused', JSON.stringify(r.body.job?.counters));
+  await j('POST', `/api/jobs/${job1.id}/start`);
+  const done1b = await waitTerminal(j, job1.id);
+  const c1b = done1b.body.counters;
+  check('重置跳过后补迁成功', done1b.body.status === 'completed' && c1b.done === 4 && c1b.skipped === 0 && c1b.failed === 0, JSON.stringify(c1b));
+  check('目标通道素材数 = 预置 1 + 迁移 4（同名共存）', [...mock.vstate('dstv').assets.values()].length === 5);
+  r = await j('POST', `/api/jobs/${job1.id}/reset-skipped`);
+  check('无已跳过素材时重置返回业务错误', r.status === 409 && (r.body?.error || '').includes('没有可重置'), `status=${r.status}`);
+
+  // ── 源端同名副本：重置后 allowSameName 一次性补迁全部副本 ──
+  SRC.addAsset('asset-s6', 'group-s1', 'img_front', 'Image', 'Active', 'm-img1'); // 与 asset-s1 同组同名
+  const job5 = (await j('POST', '/api/jobs', {
+    name: '源端同名补迁',
+    sourceChannelId: srcId,
+    targetChannelId: dstId,
+    groupIds: 'all',
+    statuses: ['Active'],
+    skipExisting: false,
+    autoStart: true,
+    // 串行执行：并发>1 时同名对可能同时被领走、双双通过检查（防重键尚未写入），
+    // 首轮跳过行为只有在先后处理时才是确定的
+    settings: { concurrency: 1, pollIntervalMs: 150, pollTimeoutMs: 20000 },
+  })).body;
+  const done5 = await waitTerminal(j, job5.id);
+  check('源端同名副本首轮仅迁 1 份', done5.body.counters.done === 4 && done5.body.counters.skipped === 1 && done5.body.counters.total === 5, JSON.stringify(done5.body.counters));
+  r = await j('POST', `/api/jobs/${job5.id}/reset-skipped`);
+  check('重置跳过置 allowSameName 标记', r.status === 200 && r.body.job.allowSameName === true);
+  await j('POST', `/api/jobs/${job5.id}/start`);
+  const done5b = await waitTerminal(j, job5.id);
+  check('allowSameName 补迁后同名副本全部迁完', done5b.body.status === 'completed' && done5b.body.counters.done === 5 && done5b.body.counters.skipped === 0 && done5b.body.counters.failed === 0, JSON.stringify(done5b.body.counters));
+
   // ── 进程重启恢复 ──
   const job4 = (await j('POST', '/api/jobs', {
     name: '恢复测试',

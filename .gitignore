@@ -2,5 +2,9 @@ node_modules/
 data/
 data-demo/
 *.log
+*.tmp
 dist/
 docs/manual-build/lo_profile/
+.env
+Thumbs.db
+Desktop.ini
