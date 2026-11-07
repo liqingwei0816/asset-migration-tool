@@ -589,7 +589,10 @@ export class JobEngine {
         return;
       }
       if (a?.Status === 'Failed') {
-        throw new Error(`目标通道处理失败（Status=Failed），目标素材 ID：${item.dst.id}`);
+        // 携带 GetAsset 完整返回（截断防撑爆任务文件）：平台侧失败原因（审核拒绝/下载失败等）通常在其中
+        const raw = JSON.stringify(a);
+        const clipped = raw.length > 1500 ? `${raw.slice(0, 1500)}…（已截断，完整内容见平台控制台）` : raw;
+        throw new Error(`目标通道处理失败（Status=Failed），目标素材 ID：${item.dst.id}，服务端返回：${clipped}`);
       }
       // Processing 或未知状态：继续轮询
     }

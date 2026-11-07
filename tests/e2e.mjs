@@ -281,6 +281,20 @@ async function main() {
   const doneMerge = await waitTerminal(j, mergeJob.id);
   check('合并迁移：两源组进入同一目标组', doneMerge.body.status === 'completed' && dstAssetsIn('group-d-alt') === 7, `alt=${dstAssetsIn('group-d-alt')} ${JSON.stringify(doneMerge.body.counters)}`);
 
+  // ── 目标处理失败：错误信息携带完整服务端返回 ──
+  SRC.addAsset('asset-s7', 'group-s1', 'broken_img', 'Image', 'Active', 'm-broken'); // mediaKey 不存在 → 目标拉取源 URL 失败
+  const job7 = (await j('POST', '/api/jobs', {
+    name: '目标处理失败诊断', sourceChannelId: srcId, targetChannelId: dstId,
+    groupIds: ['group-s1'], statuses: ['Active'], skipExisting: false, autoStart: true,
+    settings: { concurrency: 1, pollIntervalMs: 150, pollTimeoutMs: 20000 },
+  })).body;
+  const done7 = await waitTerminal(j, job7.id);
+  const failed7 = await j('GET', `/api/jobs/${job7.id}/items?state=failed&page=1&pageSize=10`);
+  const err7 = (failed7.body.items || []).find(it => it.src.id === 'asset-s7')?.error || '';
+  check('目标 Status=Failed 时错误含「服务端返回」与失败原因字段',
+    done7.body.counters.failed >= 1 && err7.includes('服务端返回') && err7.includes('FailReason'),
+    err7.slice(0, 160));
+
   // ── 进程重启恢复 ──
   const job4 = (await j('POST', '/api/jobs', {
     name: '恢复测试',

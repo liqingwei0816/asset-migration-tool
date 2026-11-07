@@ -103,13 +103,15 @@ export function createMockArk({ processDelayMs = 200 } = {}) {
             ProjectName: b.ProjectName,
           };
           v.assets.set(a.Id, a);
-          // 模拟平台异步处理：真实拉取一次源 URL，成功则 Active，否则 Failed
+          // 模拟平台异步处理：真实拉取一次源 URL，成功则 Active，否则 Failed（带失败原因，模拟真实平台的诊断字段）
           setTimeout(async () => {
             try {
               const r = await fetch(b.URL, { headers: { Range: 'bytes=0-0' } });
               a.Status = r.ok ? 'Active' : 'Failed';
+              if (!r.ok) a.FailReason = `source fetch failed: HTTP ${r.status}`;
             } catch {
               a.Status = 'Failed';
+              a.FailReason = 'source fetch error: connection refused';
             }
           }, processDelayMs);
           res.json({ Id: a.Id, GroupId: a.GroupId, Name: a.Name, AssetType: a.AssetType, Status: 'Processing', ProjectName: a.ProjectName });

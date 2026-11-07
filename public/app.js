@@ -829,10 +829,10 @@ async function refreshDetail() {
           <td class="mono">${esc(it.src.id)}</td>
           <td>${esc(it.src.name)}</td>
           <td>${esc({ Image: '图片', Video: '视频', Audio: '音频' }[it.src.assetType] || it.src.assetType || '—')}</td>
-          <td>${badge(ITEM_STATE, it.state)}${it.state === 'failed' && it.error ? `<span class="sub" style="color:var(--danger)">${esc(it.error)}</span>` : ''}</td>
+          <td>${badge(ITEM_STATE, it.state)}</td>
           <td class="mono">${esc(it.dst.id || '—')}</td>
           <td>${it.attempts}</td>
-          <td class="sub">${esc(it.error || '')}</td>
+          <td class="cell-err${it.error ? '' : ' sub'}"${it.error ? ' title="点击展开/收起完整信息"' : ''}>${esc(it.error || '—')}</td>
         </tr>`).join('')}</tbody>
     </table>
     <div class="pager">
@@ -851,6 +851,8 @@ async function refreshDetail() {
   const next = $('#d-next');
   if (prev) prev.addEventListener('click', () => { state.detailPage--; refreshDetail(); });
   if (next) next.addEventListener('click', () => { state.detailPage++; refreshDetail(); });
+  // 错误列点击展开/收起完整服务端返回
+  document.querySelectorAll('td.cell-err[title]').forEach(td => td.addEventListener('click', () => td.classList.toggle('open')));
 }
 
 // ── 弹窗 / 轮询 / 初始化 ───────────────────────────────────
