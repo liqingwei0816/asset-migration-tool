@@ -25,6 +25,18 @@ function truncateName(name, max = 64) {
   return [...s].slice(0, max).join('');
 }
 
+/** 平台请求失败的排查详情（URL/入参/返回/尝试次数）；非 ArkError（纯本地错误）返回空串 */
+function reqDetailOf(err) {
+  if (!(err instanceof ArkError) || !err.url) return '';
+  return [
+    err.action ? `Action=${err.action}` : '',
+    `URL=${err.url}`,
+    err.requestBody ? `入参=${err.requestBody}` : '',
+    err.responseBody ? `返回=${err.responseBody}` : '',
+    err.attempts > 1 ? `尝试=${err.attempts}次` : '',
+  ].filter(Boolean).join('　');
+}
+
 class JobError extends Error {
   constructor(message, status = 409) {
     super(message);
@@ -242,7 +254,11 @@ export class JobEngine {
     }
     job.status = job._stop ? 'cancelled' : 'failed';
     job.error = err instanceof ArkError ? err.message : (err?.message || String(err));
-    if (!job._stop) this.log(job, 'error', `扫描失败：${job.error}`);
+    if (!job._stop) {
+      this.log(job, 'error', `扫描失败：${job.error}`);
+      const scanDetail = reqDetailOf(err);
+      if (scanDetail) this.log(job, 'error', `└ 请求详情　${scanDetail}`);
+    }
     job.finishedAt = nowIso();
     this.markDirty(job.id);
     this.flush();
@@ -553,6 +569,8 @@ export class JobEngine {
       item.state = 'failed';
       this.bump(job, IN_FLIGHT.includes(prevState) ? prevState : 'uploading', 'failed');
       this.log(job, 'warn', `迁移失败「${item.src.name}」：${item.error}`);
+      const reqDetail = reqDetailOf(err);
+      if (reqDetail) this.log(job, 'warn', `└ 请求详情　${reqDetail}`);
     } finally {
       item.finishedAt = nowIso();
       item.attempts++;

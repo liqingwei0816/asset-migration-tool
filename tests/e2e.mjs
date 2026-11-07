@@ -295,6 +295,20 @@ async function main() {
     done7.body.counters.failed >= 1 && err7.includes('服务端返回') && err7.includes('FailReason'),
     err7.slice(0, 160));
 
+  // ── 失败请求在运行日志中携带完整请求详情 ──
+  mock.tokens.delete('sk-src-token'); // 令牌失效 → 扫描期 ListAssetGroups 401（ArkError 带 URL/入参/返回）
+  const job8 = (await j('POST', '/api/jobs', {
+    name: '日志请求详情', sourceChannelId: srcId, targetChannelId: dstId,
+    groupIds: 'all', statuses: ['Active'], autoStart: true, settings: { pollIntervalMs: 150 },
+  })).body;
+  await waitTerminal(j, job8.id);
+  mock.tokens.add('sk-src-token');
+  const det8 = await j('GET', `/api/jobs/${job8.id}`);
+  const log8 = (det8.body.log || []).map(l => l.msg).join('\n');
+  check('失败请求日志含请求详情（Action/URL/入参/返回）',
+    log8.includes('└ 请求详情') && log8.includes('Action=') && log8.includes('入参=') && log8.includes('返回='),
+    log8.split('\n').slice(-2).join(' ⏎ ').slice(0, 200));
+
   // ── 进程重启恢复 ──
   const job4 = (await j('POST', '/api/jobs', {
     name: '恢复测试',

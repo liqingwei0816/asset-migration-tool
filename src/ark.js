@@ -19,6 +19,7 @@ export class ArkError extends Error {
     this.status = meta.status ?? null;
     this.action = meta.action ?? null;
     this.url = meta.url ?? null;
+    this.requestBody = meta.requestBody ?? null; // 请求体（入参，截断）；令牌在请求头、不捕获
     this.responseBody = meta.responseBody ?? null;
     this.attempts = meta.attempts ?? 0;
   }
@@ -101,7 +102,7 @@ export class ArkClient {
       try { json = text ? JSON.parse(text) : null; } catch { /* 非 JSON 响应按文本处理 */ }
       if (res.ok) return json;
       const msg = extractMessage(json, text, res.status);
-      const meta = { status: res.status, action, url, responseBody: text.slice(0, 500) };
+      const meta = { status: res.status, action, url, requestBody: JSON.stringify(body ?? {}).slice(0, 1000), responseBody: text.slice(0, 500) };
       if (res.status === 401) throw new ArkError('auth', `HTTP 401 未授权：${msg}（POST ${url}）`, meta);
       if (res.status === 502 || res.status === 429 || res.status >= 500) {
         throw new ArkError('transient', `HTTP ${res.status}：${msg}（POST ${url}）`, meta);
@@ -112,7 +113,7 @@ export class ArkClient {
       const detail = err.name === 'AbortError'
         ? `请求超时（>${this.settings.requestTimeoutMs}ms）`
         : `网络异常：${err.message}`;
-      throw new ArkError('transient', `${detail}（POST ${url}）`, { action, url });
+      throw new ArkError('transient', `${detail}（POST ${url}）`, { action, url, requestBody: JSON.stringify(body ?? {}).slice(0, 1000) });
     } finally {
       clearTimeout(timer);
     }
