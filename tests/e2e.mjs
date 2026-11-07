@@ -230,6 +230,57 @@ async function main() {
   const done5b = await waitTerminal(j, job5.id);
   check('allowSameName 补迁后同名副本全部迁完', done5b.body.status === 'completed' && done5b.body.counters.done === 5 && done5b.body.counters.skipped === 0 && done5b.body.counters.failed === 0, JSON.stringify(done5b.body.counters));
 
+  // ── 目标组手动映射（groupMapping）──
+  DST.addGroup('group-d-alt', 'alt_target_group'); // 与任何源组不同名的既有目标组
+  const job6 = (await j('POST', '/api/jobs', {
+    name: '手动映射迁移',
+    sourceChannelId: srcId,
+    targetChannelId: dstId,
+    groupIds: 'all',
+    statuses: ['Active'],
+    skipExisting: false,
+    autoStart: true,
+    groupMapping: { 'group-s1': 'group-d-alt' }, // figure_group_1 显式映射到异名组；voice_group 走自动
+    settings: { concurrency: 1, pollIntervalMs: 150, pollTimeoutMs: 20000 },
+  })).body;
+  const done6 = await waitTerminal(j, job6.id);
+  const c6 = done6.body.counters;
+  // 源 5 个 Active（含 1 个同组同名副本 s6，串行下会被运行期同名防重跳过）
+  check('手动映射任务完成', done6.body.status === 'completed' && c6.done === 4 && c6.skipped === 1 && c6.failed === 0, JSON.stringify(c6));
+  const dstAssetsIn = gid => [...mock.vstate('dstv').assets.values()].filter(a => a.GroupId === gid).length;
+  check('映射组素材落入指定目标组（异名组，不新建）', dstAssetsIn('group-d-alt') === 3, `alt=${dstAssetsIn('group-d-alt')}`);
+  const detail6 = await j('GET', `/api/jobs/${job6.id}`);
+  const g6s1 = detail6.body.groups.find(g => g.sourceGroupId === 'group-s1');
+  const g6s2 = detail6.body.groups.find(g => g.sourceGroupId === 'group-s2');
+  const voiceGid = [...mock.vstate('dstv').groups.values()].find(g => g.Name === 'voice_group')?.Id;
+  check('未映射组仍按同名自动匹配（复用既有组）', g6s2?.targetGroupId === voiceGid && g6s2?.created === false, JSON.stringify(g6s2));
+  check('映射记录 manual 标志正确（手动=是）', g6s1?.manual === true && g6s1?.targetGroupId === 'group-d-alt' && !g6s2?.manual, JSON.stringify({ g6s1, g6s2 }));
+
+  const badJob = (await j('POST', '/api/jobs', {
+    name: '无效映射', sourceChannelId: srcId, targetChannelId: dstId,
+    groupIds: 'all', statuses: ['Active'], autoStart: true,
+    groupMapping: { 'group-s1': 'group-not-exist' },
+    settings: { pollIntervalMs: 150 },
+  })).body;
+  const doneBad = await waitTerminal(j, badJob.id);
+  check('无效目标组 ID：扫描失败并指出该 ID', doneBad.body.status === 'failed' && (doneBad.body.error || '').includes('group-not-exist'), doneBad.body.error);
+
+  r = await j('POST', '/api/jobs', {
+    name: '范围外映射', sourceChannelId: srcId, targetChannelId: dstId,
+    groupIds: ['group-s2'], statuses: ['Active'],
+    groupMapping: { 'group-s1': 'group-d-alt' },
+  });
+  check('映射含组范围外源组返回 400', r.status === 400 && (r.body?.error || '').includes('范围外'), `status=${r.status}`);
+
+  const mergeJob = (await j('POST', '/api/jobs', {
+    name: '合并迁移', sourceChannelId: srcId, targetChannelId: dstId,
+    groupIds: 'all', statuses: ['Active'], skipExisting: false, autoStart: true,
+    groupMapping: { 'group-s1': 'group-d-alt', 'group-s2': 'group-d-alt' }, // 两源组合并进同一目标组
+    settings: { concurrency: 1, pollIntervalMs: 150, pollTimeoutMs: 20000 },
+  })).body;
+  const doneMerge = await waitTerminal(j, mergeJob.id);
+  check('合并迁移：两源组进入同一目标组', doneMerge.body.status === 'completed' && dstAssetsIn('group-d-alt') === 7, `alt=${dstAssetsIn('group-d-alt')} ${JSON.stringify(doneMerge.body.counters)}`);
+
   // ── 进程重启恢复 ──
   const job4 = (await j('POST', '/api/jobs', {
     name: '恢复测试',

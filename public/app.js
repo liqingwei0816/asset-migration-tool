@@ -38,7 +38,7 @@ async function handleServerRestart() {
     state.detail = null;
     const detailCard = $('#job-detail-card');
     if (detailCard) detailCard.style.display = 'none';
-    state.create = { groupScope: 'all', sourceGroups: [], selectedGroups: [] };
+    state.create = { groupScope: 'all', sourceGroups: [], selectedGroups: [], groupMap: {}, targetGroups: [] };
     await loadConfig();
     if (state.tab === 'channels') renderChannels();
     else if (state.tab === 'browse') renderBrowse();
@@ -99,7 +99,7 @@ const state = {
   connLostBootId: null,
   config: { channels: [], settings: {} },
   browse: { channelId: '', groupPage: 1, groupId: null, currentGroupName: '', assetPage: 1, assetStatus: '', assetName: '' },
-  create: { groupScope: 'all', sourceGroups: [] },
+  create: { groupScope: 'all', sourceGroups: [], selectedGroups: [], groupMap: {}, targetGroups: [] },
   jobs: [],
   detail: null,          // 打开详情的任务 id
   detailFilter: '',
@@ -576,7 +576,11 @@ function renderJobCreate() {
     }
     if (state.create.groupScope === 'manual') loadSourceGroups();
   });
-  dstSel.addEventListener('change', () => { state.create.dstId = dstSel.value; });
+  dstSel.addEventListener('change', () => {
+    state.create.dstId = dstSel.value;
+    state.create.groupMap = {}; // 目标通道变更，已有映射失效
+    if (state.create.groupScope === 'manual') loadSourceGroups();
+  });
   box.querySelectorAll('input[name=j-scope]').forEach(r => r.addEventListener('change', () => {
     state.create.groupScope = r.value;
     $('#j-group-picker').style.display = r.value === 'manual' ? 'block' : 'none';
@@ -586,18 +590,42 @@ function renderJobCreate() {
   $('#j-create-only').addEventListener('click', () => submitJob(false));
 }
 
+async function loadTargetGroups() {
+  // 目标通道组列表：手动模式下逐组指定迁入的目标组（groupMapping）
+  try {
+    const r = await api(`/api/channels/${encodeURIComponent(state.create.dstId)}/groups?page=1&pageSize=100`);
+    state.create.targetGroups = r.groups || [];
+  } catch {
+    state.create.targetGroups = []; // 拉取失败不阻塞源组加载，仅无法手动映射
+  }
+}
+
 async function loadSourceGroups() {
   const picker = $('#j-group-picker');
-  picker.innerHTML = '<span class="hint-inline">加载源通道组列表…</span>';
+  picker.innerHTML = '<span class="hint-inline">加载通道组列表…</span>';
   try {
-    const r = await api(`/api/channels/${encodeURIComponent(state.create.srcId)}/groups?page=1&pageSize=100`);
+    const [r] = await Promise.all([
+      api(`/api/channels/${encodeURIComponent(state.create.srcId)}/groups?page=1&pageSize=100`),
+      loadTargetGroups(),
+    ]);
     state.create.sourceGroups = r.groups;
     if (!r.groups.length) { picker.innerHTML = '<span class="hint-inline">源通道项目下没有 AIGC 组。</span>'; return; }
+    const targetOpts = gid => `<option value="auto">自动（同名匹配，无则新建）</option>` +
+      state.create.targetGroups.map(t => `<option value="${esc(t.Id)}"${state.create.groupMap?.[gid] === t.Id ? ' selected' : ''}>${esc(t.Name)} · ${esc(t.Id)}</option>`).join('');
     picker.innerHTML = `<div class="checks">${r.groups.map(g => `
-      <label><input type="checkbox" value="${esc(g.Id)}"${state.create.selectedGroups?.includes(g.Id) ? ' checked' : ''}> ${esc(g.Name)} <span class="mono" style="color:var(--muted)">${esc(g.Id)}</span></label>`).join('')}</div>
-      ${r.total > r.groups.length ? '<p class="hint" style="margin:6px 0 0">组较多，仅显示前 100 个，建议使用「全部」。</p>' : ''}`;
+      <div class="gp-row">
+        <label class="gp-src"><input type="checkbox" value="${esc(g.Id)}"${state.create.selectedGroups?.includes(g.Id) ? ' checked' : ''}> ${esc(g.Name)} <span class="mono" style="color:var(--muted)">${esc(g.Id)}</span></label>
+        <select class="gp-target" data-gid="${esc(g.Id)}" title="指定该源组迁入的目标组">${targetOpts(g.Id)}</select>
+      </div>`).join('')}</div>
+      ${r.total > r.groups.length ? '<p class="hint" style="margin:6px 0 0">组较多，仅显示前 100 个，建议使用「全部」。</p>' : ''}
+      <p class="hint" style="margin:6px 0 0">右侧下拉可指定该组迁入的目标组（默认自动：同名复用、缺失新建）。</p>`;
     picker.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
       state.create.selectedGroups = [...picker.querySelectorAll('input:checked')].map(x => x.value);
+    }));
+    picker.querySelectorAll('select.gp-target').forEach(sel => sel.addEventListener('change', () => {
+      state.create.groupMap = state.create.groupMap || {};
+      if (sel.value === 'auto') delete state.create.groupMap[sel.dataset.gid];
+      else state.create.groupMap[sel.dataset.gid] = sel.value;
     }));
   } catch (err) {
     picker.innerHTML = `<span class="hint-inline" style="color:var(--danger)">${esc(err.message)}</span>`;
@@ -611,11 +639,21 @@ async function submitJob(autoStart) {
   const groupIds = groupScope === 'all' ? 'all' : state.create.selectedGroups || [];
   if (groupScope === 'manual' && !groupIds.length) return toast('手动模式下请至少选择一个素材组', true);
   if (state.create.srcId === state.create.dstId) return toast('源通道与目标通道不能相同', true);
+  // 手动模式：收集各源组选择的目标组（'auto' = 不指定，走自动匹配）
+  let groupMapping;
+  if (groupScope === 'manual') {
+    const m = {};
+    document.querySelectorAll('#j-group-picker select.gp-target').forEach(sel => {
+      if (sel.value !== 'auto' && groupIds.includes(sel.dataset.gid)) m[sel.dataset.gid] = sel.value;
+    });
+    if (Object.keys(m).length) groupMapping = m;
+  }
   const body = {
     name: $('#j-name').value.trim(),
     sourceChannelId: state.create.srcId,
     targetChannelId: state.create.dstId,
     groupIds,
+    groupMapping,
     statuses,
     skipExisting: $('#j-skip').value === '1',
     autoStart,
