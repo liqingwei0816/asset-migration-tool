@@ -175,6 +175,21 @@ export class JobEngine {
     const groupIds = input.groupIds === 'all' || input.groupIds == null
       ? 'all'
       : (Array.isArray(input.groupIds) && input.groupIds.length ? input.groupIds.map(String) : 'all');
+    // 目标组显式映射（源组ID → 目标组ID）：未映射的源组沿用「同名复用/缺失新建」的自动规则
+    let groupMapping = null;
+    if (input.groupMapping != null) {
+      if (typeof input.groupMapping !== 'object' || Array.isArray(input.groupMapping)) {
+        throw new JobError('groupMapping 必须是「源组ID → 目标组ID」的对象', 400);
+      }
+      const entries = Object.entries(input.groupMapping).filter(([, v]) => v != null && String(v).trim() !== '');
+      if (entries.length) {
+        groupMapping = Object.fromEntries(entries.map(([k, v]) => [String(k).trim(), String(v).trim()]));
+        const outOfScope = groupIds !== 'all'
+          ? Object.keys(groupMapping).filter(k => !groupIds.includes(k))
+          : [];
+        if (outOfScope.length) throw new JobError(`groupMapping 含组范围外的源组 ID：${outOfScope.join('、')}`, 400);
+      }
+    }
     const job = {
       id: newJobId(),
       name: String(input.name || '').trim() || `${src.name} → ${dst.name}`,
@@ -185,7 +200,7 @@ export class JobEngine {
       finishedAt: null,
       source: { channelId: src.id, name: src.name },
       target: { channelId: dst.id, name: dst.name },
-      filter: { groupIds, statuses },
+      filter: { groupIds, statuses, groupMapping },
       skipExisting: input.skipExisting === undefined ? !!this.config.data.settings.skipExisting : !!input.skipExisting,
       autoStart: !!input.autoStart,
       settings: { ...this.config.data.settings, ...(input.settings && typeof input.settings === 'object' ? input.settings : {}) },
@@ -271,21 +286,39 @@ export class JobEngine {
       const dstGroups = await dst.listAllGroups();
       job._lastScanProgress = Date.now();
       const dstByName = new Map(dstGroups.map(g => [g.Name, g]));
+      const dstById = new Map(dstGroups.map(g => [g.Id, g]));
+      // 手动映射的目标组 ID 必须在目标通道真实存在：扫描开始即整体校验，避免迁到一半才发现配置错误
+      const mapping = job.filter.groupMapping || null;
+      if (mapping) {
+        const invalid = [...new Set(Object.values(mapping))].filter(id => !dstById.has(id));
+        if (invalid.length) throw new Error(`目标组映射无效（目标通道不存在这些组 ID）：${invalid.join('、')}`);
+        this.log(job, 'info', `目标组手动映射：${Object.keys(mapping).length} 个源组使用显式指定的目标组`);
+      }
 
       for (const g of srcGroups) {
         if (job._stop || job.status !== 'scanning') throw new Error('已取消');
-        let target = dstByName.get(g.Name);
+        let target = null;
         let created = false;
-        if (!target) {
-          target = await dst.createAssetGroup({
-            name: g.Name,
-            description: `由素材库迁移工具创建，迁移自「${job.source.name}」/${g.Name}${g.Description ? `。原描述：${g.Description}` : ''}`,
-          });
-          created = true;
-          dstByName.set(g.Name, target);
-          this.log(job, 'info', `创建目标素材组「${g.Name}」→ ${target.Id}`);
+        let manual = false;
+        const mappedId = mapping ? mapping[g.Id] : null;
+        if (mappedId) {
+          // 手动映射优先：不按名称匹配、不自动创建（组由用户显式指定）
+          target = dstById.get(mappedId);
+          manual = true;
+          this.log(job, 'info', `使用手动映射「${g.Name}」→ 目标组 ${target.Id}`);
+        } else {
+          target = dstByName.get(g.Name);
+          if (!target) {
+            target = await dst.createAssetGroup({
+              name: g.Name,
+              description: `由素材库迁移工具创建，迁移自「${job.source.name}」/${g.Name}${g.Description ? `。原描述：${g.Description}` : ''}`,
+            });
+            created = true;
+            dstByName.set(g.Name, target);
+            this.log(job, 'info', `创建目标素材组「${g.Name}」→ ${target.Id}`);
+          }
         }
-        job.groups.push({ sourceGroupId: g.Id, sourceGroupName: g.Name, targetGroupId: target.Id, created });
+        job.groups.push({ sourceGroupId: g.Id, sourceGroupName: g.Name, targetGroupId: target.Id, created, manual });
 
         let existingNames = null;
         if (job.skipExisting) {
@@ -603,9 +636,9 @@ export class JobEngine {
     if (job.groups.length) {
       L.push('## 素材组映射');
       L.push('');
-      L.push('| 源组 | 目标组 | 新建 |');
-      L.push('| --- | --- | --- |');
-      for (const g of job.groups) L.push(`| ${g.sourceGroupName} | ${g.targetGroupId} | ${g.created ? '是' : '否'} |`);
+      L.push('| 源组 | 目标组 | 新建 | 映射方式 |');
+      L.push('| --- | --- | --- | --- |');
+      for (const g of job.groups) L.push(`| ${g.sourceGroupName} | ${g.targetGroupId} | ${g.created ? '是' : '否'} | ${g.manual ? '手动指定' : '自动匹配'} |`);
       L.push('');
     }
     const failedItems = job.items.filter(it => it.state === 'failed');
