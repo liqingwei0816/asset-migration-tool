@@ -210,10 +210,10 @@ function openChannelModal(ch) {
   openModal(`
     <h3>${isEdit ? '编辑通道' : '新增通道'}</h3>
     <div class="form-grid">
-      <div class="field"><label>通道名称</label><input id="f-name" placeholder="如：火山通道" value="${esc(ch?.name || '')}"></div>
-      <div class="field"><label>服务地址</label><input id="f-baseurl" placeholder="https://llm.future.jetsentv.com" value="${esc(ch?.baseUrl || '')}"></div>
+      <div class="field"><label>通道名称</label><input id="f-name" placeholder="如：通道A" value="${esc(ch?.name || '')}"></div>
+      <div class="field"><label>服务地址</label><input id="f-baseurl" placeholder="https://platform.example.com" value="${esc(ch?.baseUrl || '')}"></div>
       <div class="field"><label>服务商标识</label><input id="f-vendor" placeholder="平台分配的通道标识（URL 路径段）" value="${esc(ch?.vendor || '')}"></div>
-      <div class="field"><label>ProjectName</label><input id="f-project" placeholder="如：yd_test" value="${esc(ch?.projectName || '')}"></div>
+      <div class="field"><label>ProjectName</label><input id="f-project" placeholder="如：my_project" value="${esc(ch?.projectName || '')}"></div>
       <div class="field" style="grid-column:1/-1"><label>访问令牌（Authorization: Bearer sk-…）${isEdit ? '；留空保持原值' : ''}</label>
         <input id="f-token" type="password" placeholder="${isEdit ? `已保存：${ch.tokenHint}，留空不修改` : 'sk-xxxx'}" autocomplete="new-password"></div>
     </div>

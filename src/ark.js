@@ -39,7 +39,7 @@ export function troubleshootHint(err) {
 export class ArkClient {
   /**
    * @param {object} opts
-   * @param {string} opts.baseUrl    服务地址，如 https://llm.future.jetsentv.com
+   * @param {string} opts.baseUrl    服务地址，如 https://platform.example.com
    * @param {string} opts.vendor     服务商标识（URL 路径段）
    * @param {string} opts.token      访问令牌 sk-xxx
    * @param {string} opts.projectName 项目名

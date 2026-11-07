@@ -5,6 +5,9 @@ data-demo/
 *.tmp
 dist/
 docs/manual-build/lo_profile/
+docs/manual-build/node_modules/
 .env
 Thumbs.db
 Desktop.ini
+# 旧版手册 pdf 含未脱敏截图，已从仓库移除；重新生成干净版本后可 git add -f 加回
+用户手册.pdf

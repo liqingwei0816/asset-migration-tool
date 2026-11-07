@@ -62,8 +62,8 @@ const server = await new Promise(resolve => {
 
 // 幂等播种：已有配置/任务则不重复创建，保证重启后 id 稳定
 const seedChannels = [
-  ['火山通道', 'srcv', 'p_src', 'sk-src-token'],
-  ['移动云通道', 'dstv', 'p_dst', 'sk-dst-token'],
+  ['演示源通道', 'srcv', 'p_src', 'sk-src-token'],
+  ['演示目标通道', 'dstv', 'p_dst', 'sk-dst-token'],
 ];
 let cfg = await (await fetch(`${BASE}/api/config`)).json();
 if (cfg.channels.length === 0) {

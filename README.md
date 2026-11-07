@@ -3,7 +3,7 @@
 将素材库平台一个通道（服务商标识）下的 AIGC 素材组与素材迁移到另一个通道。浏览器操作，中文界面，配置与任务状态均以文件形式持久化在服务端 `data/` 目录。
 
 对接契约：《素材库对外接入文档 v1.2》（`POST {服务地址}/{服务商标识}/asset/v1/ark?Action={Action}`）。
-配套文档：《素材库迁移工具解决方案.md》（设计决策与架构）、《用户手册》（本目录，md/docx/pdf 三格式，含界面截图与 FAQ）。
+配套文档：《素材库迁移工具解决方案.md》（设计决策与架构）、《用户手册》（本目录，md/docx 双格式，含界面截图与 FAQ）。
 
 ## 快速开始
 
@@ -91,8 +91,8 @@ asset-migration-tool/
 │   └── demo.mjs             演示模式入口
 ├── docs/
 │   ├── manual-images/       用户手册截图素材
-│   └── manual-build/        手册 docx/pdf 生成脚本（node generate.cjs）
-├── 用户手册.md / .docx / .pdf
+│   └── manual-build/        手册 docx 生成脚本（node generate.cjs）
+├── 用户手册.md / .docx
 └── data/                    运行时生成：config.json + jobs/*.json
 ```
 

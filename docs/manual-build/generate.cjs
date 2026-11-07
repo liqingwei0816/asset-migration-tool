@@ -11,8 +11,9 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-const IMG_DIR = "D:/trae_projects/lihua/asset-migration-tool/docs/manual-images";
-const OUT = "D:/trae_projects/lihua/asset-migration-tool/用户手册.docx";
+// 相对脚本自身定位，便于在任何机器上构建
+const IMG_DIR = path.resolve(__dirname, "..", "manual-images");
+const OUT = path.resolve(__dirname, "..", "..", "用户手册.docx");
 
 // ── 调色板 DS-1 Deep Sea（design-system.md）──
 const PAL = {
@@ -275,7 +276,7 @@ function bodyHeader() {
 const bodyChildren = [];
 
 bodyChildren.push(h1("一、项目背景"));
-bodyChildren.push(body("素材库平台对外提供统一的「服务商标识」通道（如火山引擎、移动云等），同一模型业务可能同时接入多个通道。同一素材在不同通道中对应不同的素材 ID，互相不通用：当业务需要切换通道、双通道并行或灾备时，原有素材无法直接使用，成为核心障碍。"));
+bodyChildren.push(body("素材库平台对外提供统一的「服务商标识」通道（每个服务商一个标识），同一模型业务可能同时接入多个通道。同一素材在不同通道中对应不同的素材 ID，互相不通用：当业务需要切换通道、双通道并行或灾备时，原有素材无法直接使用，成为核心障碍。"));
 bodyChildren.push(body("本工具为解决这一问题而生：把一个通道里的素材组与素材，批量、可校验、可追溯地迁移到另一个通道，让「切换 Provider」从数据风险操作变成常规操作。工具采用网页版工作台形态，在任何一台能访问素材库平台的机器上启动服务，用浏览器打开页面即可操作，无需安装客户端。"));
 bodyChildren.push(body("迁移采用 URL 直传方式：源素材的下载地址直接交给目标通道拉取，素材字节不经过工具，速度快、磁盘占用小。逐素材校验「目标存在、状态可用、类型一致」，未通过即标记失败；目标已存在的同名素材自动跳过，任务可以放心重复执行。"));
 
@@ -283,7 +284,7 @@ bodyChildren.push(h1("二、功能总览"));
 bodyChildren.push(body("工作台页面顶部有三个标签页，对应三个功能模块：通道配置（使用前的准备）、素材浏览（迁移前的核对）、迁移任务（核心功能）。以下分节说明各模块的界面与操作。"));
 
 bodyChildren.push(h2("2.1 通道配置"));
-bodyChildren.push(body("通道是使用本工具的前提。每个通道对应素材库平台的一个「服务商标识」，需要配置五项信息：名称（自定义便于识别）、服务地址（平台地址）、服务商标识（平台分配的通道标识，如 volcano、ecloud）、ProjectName（数据隔离的项目名）、访问令牌（sk- 开头，等同账号权限）。"));
+bodyChildren.push(body("通道是使用本工具的前提。每个通道对应素材库平台的一个「服务商标识」，需要配置五项信息：名称（自定义便于识别）、服务地址（平台地址）、服务商标识（平台分配的通道标识，如 vendor-a、vendor-b）、ProjectName（数据隔离的项目名）、访问令牌（sk- 开头，等同账号权限）。"));
 bodyChildren.push(...figure("01-通道配置.png", "图 1 通道配置页：通道列表与新增入口"));
 bodyChildren.push(body("录入信息后，建议先点击「测试连通」再保存：成功时显示延迟与该项目下的素材组数量；失败时展示完整请求链路（实际请求的 URL、HTTP 状态、响应体原文）与针对性的排查建议，可直接比对是服务地址还是服务商标识填写有误。", { after: 120 }));
 bodyChildren.push(...figure("02-通道编辑与连通测试.png", "图 2 通道编辑弹窗与连通测试结果"));
