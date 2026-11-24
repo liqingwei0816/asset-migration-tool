@@ -1,6 +1,7 @@
 node_modules/
 data/
 data-demo/
+reports/local-load/
 *.log
 *.tmp
 dist/

@@ -38,10 +38,14 @@ PORT=9000 npm start                            # 指定端口
 ASSET_MIGRATION_DATA_DIR=/var/lib/amta npm start   # 指定数据目录
 npm test                                       # 端到端测试（39 项，内置模拟素材库）
 npm run audit                                  # 静态一致性审计（类名/路由/函数/id）
+npm run load:local                             # 本地模拟压测（独立进程/随机端口，约 6–8 分钟）
+npm run load:local -- --quick                   # 压测脚本快速验证
 node tests/demo.mjs                            # 演示模式：模拟素材库 + 预置数据，http://localhost:7899
 ```
 
 演示模式数据持久化在 `data-demo/`（`DEMO_RESET=1 node tests/demo.mjs` 可清空重来），用于体验与验收，不访问真实平台。
+
+本地压测报告位于 `reports/local-load/<时间戳>/`，包含 `report.html`、`report.md`、`results.json`、`results.csv` 和万级任务的 CPU 采样文件。场景与统计口径见 [压测说明](tests/load/README.md)。压测不读取正式通道配置，也不连接真实平台。
 
 服务器部署建议用进程守护，例如 systemd：
 

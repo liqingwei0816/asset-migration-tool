@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node tests/e2e.mjs",
-    "audit": "node tests/audit.mjs"
+    "audit": "node tests/audit.mjs",
+    "load:local": "node tests/load/run.mjs"
   },
   "dependencies": {
     "express": "^4.19.2"

@@ -13,7 +13,7 @@ import express from 'express';
 const rid = prefix => `${prefix}-${crypto.randomBytes(3).toString('hex')}`;
 const need = (cond, msg) => { if (!cond) { const e = new Error(msg); e.statusCode = 400; throw e; } };
 
-export function createMockArk({ processDelayMs = 200 } = {}) {
+export function createMockArk({ processDelayMs = 200, idFactory = rid, consumeMedia = false, onAssetProcessed } = {}) {
   const vendors = new Map(); // vendor → { groups: Map, assets: Map }
   const media = new Map();   // 文件名 → Buffer（模拟公网可访问的素材 URL）
   const tokens = new Set();  // 有效令牌；为空时放行任意 Bearer sk-*
@@ -49,7 +49,7 @@ export function createMockArk({ processDelayMs = 200 } = {}) {
       switch (Action) {
         case 'CreateAssetGroup': {
           need(b.Name && b.ProjectName, 'parameter Name/ProjectName is required');
-          const g = { Id: rid('group'), Name: b.Name, Description: b.Description || '', ProjectName: b.ProjectName, GroupType: 'AIGC' };
+          const g = { Id: idFactory('group'), Name: b.Name, Description: b.Description || '', ProjectName: b.ProjectName, GroupType: 'AIGC' };
           v.groups.set(g.Id, g);
           res.json(g);
           break;
@@ -94,7 +94,7 @@ export function createMockArk({ processDelayMs = 200 } = {}) {
           const g = v.groups.get(b.GroupId);
           need(g && g.ProjectName === b.ProjectName, 'GroupId not found in project');
           const a = {
-            Id: rid('asset'),
+            Id: idFactory('asset'),
             GroupId: b.GroupId,
             Name: b.Name,
             AssetType: b.AssetType,
@@ -104,15 +104,18 @@ export function createMockArk({ processDelayMs = 200 } = {}) {
           };
           v.assets.set(a.Id, a);
           // 模拟平台异步处理：真实拉取一次源 URL，成功则 Active，否则 Failed（带失败原因，模拟真实平台的诊断字段）
+          const acceptedAt = performance.now();
           setTimeout(async () => {
             try {
               const r = await fetch(b.URL, { headers: { Range: 'bytes=0-0' } });
+              if (consumeMedia) await r.arrayBuffer();
               a.Status = r.ok ? 'Active' : 'Failed';
               if (!r.ok) a.FailReason = `source fetch failed: HTTP ${r.status}`;
             } catch {
               a.Status = 'Failed';
               a.FailReason = 'source fetch error: connection refused';
             }
+            onAssetProcessed?.({ id: a.Id, status: a.Status, durationMs: performance.now() - acceptedAt });
           }, processDelayMs);
           res.json({ Id: a.Id, GroupId: a.GroupId, Name: a.Name, AssetType: a.AssetType, Status: 'Processing', ProjectName: a.ProjectName });
           break;
